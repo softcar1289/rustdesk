@@ -1,0 +1,68 @@
+name: Build RustDesk Windows x64
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install LLVM
+        run: |
+          choco install -y llvm --version=15.0.2
+          echo "LIBCLANG_PATH=C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Setup vcpkg
+        run: |
+          git clone https://github.com/microsoft/vcpkg $env:USERPROFILE\vcpkg
+          & $env:USERPROFILE\vcpkg\bootstrap-vcpkg.bat
+          echo "VCPKG_ROOT=$env:USERPROFILE\vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Append
+          & $env:USERPROFILE\vcpkg\vcpkg.exe install libvpx:x64-windows-static libyuv:x64-windows-static opus:x64-windows-static aom:x64-windows-static
+
+      - name: Download Sciter DLL
+        run: |
+          New-Item -ItemType Directory -Force -Path target\release | Out-Null
+          Invoke-WebRequest -UseBasicParsing -Uri https://raw.githubusercontent.com/c-smile/sciter-sdk/master/bin.win/x64/sciter.dll -OutFile target\release\sciter.dll
+
+      - name: Patch server config
+        env:
+          RENDEZVOUS_SERVER: ${{ secrets.RENDEZVOUS_SERVER }}
+          RS_PUB_KEY: ${{ secrets.RS_PUB_KEY }}
+          RELAY_SERVER: ${{ secrets.RELAY_SERVER }}
+        run: |
+          $configFile = Get-ChildItem -Recurse -File -Path libs -Filter config.rs | Select-Object -First 1
+          if (-not $configFile) { Write-Error "config.rs not found"; exit 1 }
+          Write-Host "Patching: $($configFile.FullName)"
+          (Get-Content $configFile.FullName) |
+            ForEach-Object {
+              $_ -replace '(pub const DEFAULT_RENDEZVOUS_SERVER\s*:\s*&str\s*=\s*)"[^"]*"', "$1\"$env:RENDEZVOUS_SERVER\"" |
+              ForEach-Object { $_ -replace '(pub const DEFAULT_RS_PUB_KEY\s*:\s*&str\s*=\s*)"[^"]*"', "$1\"$env:RS_PUB_KEY\"" } |
+              ForEach-Object { $_ -replace '(pub const DEFAULT_RELAY_SERVER\s*:\s*&str\s*=\s*)"[^"]*"', "$1\"$env:RELAY_SERVER\"" }
+            } | Set-Content $configFile.FullName -Encoding UTF8
+
+      - name: Build
+        run: cargo build --release --target x86_64-pc-windows-msvc
+
+      - name: Rename output
+        run: |
+          Copy-Item target\x86_64-pc-windows-msvc\release\rustdesk.exe VoiceAsia-RemoteSupport.exe
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: VoiceAsia-RemoteSupport
+          path: VoiceAsia-RemoteSupport.exe
+          retention-days: 30
