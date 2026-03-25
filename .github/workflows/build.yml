@@ -22,7 +22,7 @@ jobs:
 
       - name: Install LLVM
         run: |
-          choco install -y llvm --version=15.0.2
+          choco install -y llvm
           echo "LIBCLANG_PATH=C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Setup vcpkg
