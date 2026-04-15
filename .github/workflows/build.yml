@@ -48,12 +48,16 @@ jobs:
           $configFile = Get-ChildItem -Recurse -File -Path libs -Filter config.rs | Select-Object -First 1
           if (-not $configFile) { Write-Error "config.rs not found"; exit 1 }
           Write-Host "Patching: $($configFile.FullName)"
-          (Get-Content $configFile.FullName) |
-            ForEach-Object {
-              $_ -replace '(pub const DEFAULT_RENDEZVOUS_SERVER\s*:\s*&str\s*=\s*)"[^"]*"', "$1\"$env:RENDEZVOUS_SERVER\"" |
-              ForEach-Object { $_ -replace '(pub const DEFAULT_RS_PUB_KEY\s*:\s*&str\s*=\s*)"[^"]*"', "$1\"$env:RS_PUB_KEY\"" } |
-              ForEach-Object { $_ -replace '(pub const DEFAULT_RELAY_SERVER\s*:\s*&str\s*=\s*)"[^"]*"', "$1\"$env:RELAY_SERVER\"" }
-            } | Set-Content $configFile.FullName -Encoding UTF8
+          $content = Get-Content $configFile.FullName -Raw
+          $rv = $env:RENDEZVOUS_SERVER
+          $pk = $env:RS_PUB_KEY
+          $rl = $env:RELAY_SERVER
+          Write-Host "RENDEZVOUS=$rv  RELAY=$rl  KEY=$($pk.Substring(0,8))..."
+          $content = $content -replace '(pub const DEFAULT_RENDEZVOUS_SERVER\s*:\s*&str\s*=\s*)"[^"]*"', "`$1`"$rv`""
+          $content = $content -replace '(pub const DEFAULT_RS_PUB_KEY\s*:\s*&str\s*=\s*)"[^"]*"', "`$1`"$pk`""
+          $content = $content -replace '(pub const DEFAULT_RELAY_SERVER\s*:\s*&str\s*=\s*)"[^"]*"', "`$1`"$rl`""
+          Set-Content $configFile.FullName $content -Encoding UTF8 -NoNewline
+          Write-Host "Patch complete"
 
       - name: Build
         run: cargo build --release --target x86_64-pc-windows-msvc
