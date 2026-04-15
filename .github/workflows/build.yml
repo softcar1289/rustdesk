@@ -30,6 +30,8 @@ jobs:
           git clone https://github.com/microsoft/vcpkg $env:USERPROFILE\vcpkg
           & $env:USERPROFILE\vcpkg\bootstrap-vcpkg.bat
           echo "VCPKG_ROOT=$env:USERPROFILE\vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Append
+          # Remove vcpkg.json to use classic mode
+          Remove-Item -Path vcpkg.json -ErrorAction SilentlyContinue
           & $env:USERPROFILE\vcpkg\vcpkg.exe install libvpx:x64-windows-static libyuv:x64-windows-static opus:x64-windows-static aom:x64-windows-static
 
       - name: Download Sciter DLL
